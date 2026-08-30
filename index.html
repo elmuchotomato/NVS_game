@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Last Orders — pub quiz</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root{
+  --ink:#0E211B; --baize:#17352B; --baize2:#1E4437;
+  --brass:#C9A54E; --brass-dim:#8A7233; --chalk:#F2EDE1;
+  --claret:#C0392B; --claret-deep:#7E211A; --moss:#5C7F6B;
+  --display:'Anton','Arial Narrow',sans-serif;
+  --body:'Instrument Sans',system-ui,sans-serif;
+  --data:'JetBrains Mono',ui-monospace,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{ background:var(--ink); color:var(--chalk); font-family:var(--body); margin:0;
+  padding:20px; min-height:100vh; overflow-x:hidden; -webkit-text-size-adjust:100%; }
+button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit }
+button:focus-visible, input:focus-visible{ outline:3px solid var(--brass); outline-offset:2px }
+
+.wrap{ max-width:1100px; margin:0 auto }
+.narrow{ max-width:560px }
+.eyebrow{ font-family:var(--data); font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--brass); font-weight:700 }
+h1.big{ font-family:var(--display); font-size:clamp(44px,11vw,104px); line-height:.86; letter-spacing:.01em;
+  text-transform:uppercase; margin:10px 0 0 }
+h1.big em{ font-style:normal; color:var(--brass) }
+.sub{ max-width:46ch; margin:16px 0 0; color:#C9C3B4; font-size:15px; line-height:1.5 }
+
+.panel{ background:var(--baize); border:1px solid rgba(201,165,78,.22); border-radius:4px; padding:20px }
+.choice{ display:block; width:100%; text-align:left; background:var(--baize); border:1px solid rgba(201,165,78,.3);
+  border-radius:4px; padding:18px 20px; margin-top:12px; transition:transform .12s ease, background .12s ease }
+.choice:hover{ background:var(--baize2); transform:translateX(4px) }
+.choice .t{ font-family:var(--display); text-transform:uppercase; font-size:24px; letter-spacing:.02em }
+.choice .d{ font-size:13px; color:#B3AE9F; margin-top:4px }
+
+.primary{ background:var(--brass); color:#17140A; font-family:var(--display); text-transform:uppercase;
+  font-size:20px; letter-spacing:.04em; padding:14px 26px; border-radius:3px; transition:filter .12s ease }
+.primary:hover{ filter:brightness(1.12) }
+.primary:disabled{ opacity:.35; cursor:not-allowed }
+.ghost{ border:1px solid rgba(242,237,225,.3); padding:11px 18px; border-radius:3px; font-size:13px;
+  font-family:var(--data); text-transform:uppercase; letter-spacing:.1em }
+.ghost:hover{ border-color:var(--brass); color:var(--brass) }
+
+.input{ background:#0A1813; border:1px solid rgba(242,237,225,.25); color:var(--chalk); font-size:20px;
+  padding:14px 16px; border-radius:3px; width:100%; font-family:inherit }
+.input::placeholder{ color:#5F6C64 }
+.code{ font-family:var(--data); font-weight:700; font-size:clamp(40px,9vw,76px); letter-spacing:.16em;
+  color:var(--brass); line-height:1 }
+
+.qmeta{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap }
+.qnum{ font-family:var(--data); font-size:12px; letter-spacing:.2em; color:var(--moss); text-transform:uppercase }
+.q{ font-family:var(--display); font-size:clamp(26px,4.6vw,54px); line-height:1.04; text-transform:uppercase;
+  margin:14px 0 0; letter-spacing:.005em }
+.q.sm{ font-size:clamp(22px,6vw,34px) }
+.opts{ display:grid; gap:10px; margin-top:22px }
+@media(min-width:760px){ .opts.two{ grid-template-columns:1fr 1fr } }
+.opt{ display:flex; align-items:center; gap:14px; background:var(--baize); border:1px solid rgba(242,237,225,.16);
+  border-radius:4px; padding:16px 18px; text-align:left; font-size:17px; line-height:1.25; width:100%;
+  transition:background .12s ease, border-color .12s ease }
+button.opt:hover{ background:var(--baize2); border-color:var(--brass) }
+.opt .k{ font-family:var(--data); font-weight:700; font-size:13px; color:var(--brass); border:1px solid var(--brass-dim);
+  border-radius:2px; width:26px; height:26px; display:grid; place-items:center; flex:none }
+.opt.sel{ border-color:var(--brass); background:var(--baize2) }
+.opt.sel .k{ background:var(--brass); color:#17140A }
+.opt.right{ border-color:#4E9E6A; background:rgba(78,158,106,.15) }
+.opt.right .k{ background:#4E9E6A; color:#0B1A11; border-color:#4E9E6A }
+.opt.wrong{ opacity:.4 }
+.opt.locked{ opacity:.5; cursor:not-allowed }
+
+.timer{ height:8px; background:rgba(242,237,225,.1); border-radius:99px; overflow:hidden; margin-top:20px }
+.timer i{ display:block; height:100%; background:var(--brass); transition:width .2s linear }
+.timer.low i{ background:var(--claret) }
+
+.twist{ position:relative; border:3px solid var(--claret); background:var(--claret-deep); border-radius:6px;
+  padding:clamp(26px,5vw,54px); text-align:center; overflow:hidden;
+  animation:slam .5s cubic-bezier(.16,1.3,.4,1) both }
+.twist::after{ content:''; position:absolute; inset:9px; border:1px dashed rgba(242,237,225,.32);
+  border-radius:3px; pointer-events:none }
+@keyframes slam{ 0%{transform:scale(1.35) rotate(-6deg);opacity:0} 60%{transform:scale(.97) rotate(1.2deg);opacity:1}
+  100%{transform:scale(1) rotate(0);opacity:1} }
+.twist .tag{ font-family:var(--data); font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#F0B8B2 }
+.twist .name{ font-family:var(--display); font-size:clamp(38px,9vw,86px); line-height:.92; text-transform:uppercase;
+  margin:14px 0 0 }
+.twist .desc{ font-size:clamp(15px,2vw,21px); line-height:1.45; margin:16px auto 0; max-width:34ch; color:#FBE9E6 }
+
+.row{ display:flex; align-items:center; gap:14px; padding:13px 4px; border-bottom:1px solid rgba(242,237,225,.1) }
+.row .rank{ font-family:var(--data); font-size:13px; color:var(--moss); width:28px; flex:none }
+.row .nm{ flex:1; font-size:18px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.row .sc{ font-family:var(--data); font-weight:700; font-size:20px; color:var(--brass) }
+.row .dl{ font-family:var(--data); font-size:13px; width:70px; text-align:right; flex:none }
+.row.up .dl{ color:#6FCB8E } .row.dn .dl{ color:#E8776B }
+.row.lead .nm{ color:var(--brass) }
+.row.me{ background:rgba(201,165,78,.08) }
+
+.chips{ display:flex; gap:10px; margin-top:16px }
+.chip{ flex:1; border:1px solid rgba(242,237,225,.25); border-radius:4px; padding:16px 8px; text-align:center;
+  font-family:var(--display); font-size:26px }
+.chip small{ display:block; font-family:var(--data); font-size:10px; letter-spacing:.14em; color:#9AA79F; margin-top:4px }
+.chip.on{ background:var(--brass); color:#17140A; border-color:var(--brass) }
+.chip.on small{ color:#4A3E15 }
+
+.note{ font-size:14px; line-height:1.5; color:#B3AE9F; margin-top:16px; border-left:2px solid var(--brass-dim);
+  padding-left:14px }
+.banner{ background:var(--claret-deep); border:1px solid var(--claret); border-radius:3px; padding:12px 14px;
+  font-size:14px; line-height:1.5; margin-bottom:14px }
+.teamchips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:16px }
+.teamchip{ font-family:var(--data); font-size:13px; border:1px solid var(--brass-dim); color:var(--brass);
+  padding:6px 12px; border-radius:99px; animation:pop .3s ease both }
+@keyframes pop{ from{transform:scale(.6);opacity:0} to{transform:scale(1);opacity:1} }
+.bar{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:22px; flex-wrap:wrap }
+.foot{ display:flex; gap:12px; margin-top:26px; align-items:center; flex-wrap:wrap }
+.stat{ font-family:var(--data); font-size:13px; color:var(--moss); letter-spacing:.08em }
+code.inline{ font-family:var(--data); background:#0A1813; padding:2px 6px; border-radius:2px; font-size:13px }
+ol.setup{ line-height:1.7; padding-left:20px; color:#C9C3B4; font-size:15px }
+ol.setup li{ margin-bottom:8px }
+
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+/* ================================================================
+   1. PASTE YOUR FIREBASE CONFIG HERE
+   Firebase console → Project settings → Your apps → Web app → Config
+   ================================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAZu-z9ESCqD3KevbcDE2uNLUyQiaB3ezQ",
+  authDomain: "pubquiz-2cb02.firebaseapp.com",
+  databaseURL: "https://pubquiz-2cb02-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "pubquiz-2cb02",
+  appId: "1:1071887992374:web:574f0c83dc1fe06a6d7a97"
+};
+/* ================================================================ */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, update, get, onValue, onDisconnect }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const CONFIGURED = !JSON.stringify(FIREBASE_CONFIG).includes("PASTE_ME");
+let db = null;
+if (CONFIGURED) {
+  try { db = getDatabase(initializeApp(FIREBASE_CONFIG)); }
+  catch (e) { console.error(e); }
+}
+
+/* ---------------------------- content ---------------------------- */
+
+const TWISTS = {
+  none: null,
+  speed: { name:"Speed Kills", tag:"The rules just changed",
+    desc:"First team with the right answer scores double. Everyone else gets normal points. Hesitate and you lose the bonus." },
+  negative: { name:"Negative Marking", tag:"The rules just changed",
+    desc:"Right answer: full points. Wrong answer: minus 100. Not answering costs you nothing. Guessing is now a decision." },
+  wager: { name:"Double or Nothing", tag:"Lock in before you see it",
+    desc:"Pick a multiplier on your phone now, before the question appears. Right pays out at your multiplier. Wrong loses half of it." },
+  lonewolf: { name:"Lone Wolf", tag:"The rules just changed",
+    desc:"If you are the only team in the room with the right answer, you score triple. If two of you get it, you both score normal." },
+  underdog: { name:"Underdog Uprising", tag:"The rules just changed",
+    desc:"Everyone in the bottom half of the leaderboard scores double this question. Nobody is out of this." },
+  bounty: { name:"Bounty on the Leader", tag:"The rules just changed",
+    desc:"Answer correctly while the current leader gets it wrong and you collect a 150 point bounty. The leader can only defend." },
+  swap: { name:"The Great Swap", tag:"Brace yourselves",
+    desc:"Answer this one normally. Then first and second place swap scores. Yes, really." },
+  final: { name:"Last Orders", tag:"Final question",
+    desc:"500 points on the table. Pick your multiplier before you see it. Wrong answers lose half. This decides the night." }
+};
+
+const QUESTIONS = [
+  { q:"What is the only mammal capable of true sustained flight?",
+    o:["Flying squirrel","Bat","Colugo","Sugar glider"], a:1, p:100, t:"none",
+    n:"Everything else on that list is gliding, not flying." },
+  { q:"Which country eats the most chocolate per person?",
+    o:["Belgium","Germany","Switzerland","Austria"], a:2, p:100, t:"none",
+    n:"Roughly 10 kg per person per year, comfortably ahead of the field." },
+  { q:"What was Google originally called?",
+    o:["BackRub","GoTo","Archie","SearchMe"], a:0, p:100, t:"speed",
+    n:"Named for its analysis of backlinks. The rebrand was a good call." },
+  { q:"Which of these is NOT a real element on the periodic table?",
+    o:["Copernicium","Livermorium","Aurelium","Nihonium"], a:2, p:150, t:"negative",
+    n:"Aurelium sounds plausible, which is exactly why it's here." },
+  { q:"In which year did euro notes and coins enter circulation?",
+    o:["1999","2000","2002","2004"], a:2, p:200, t:"wager",
+    n:"The euro existed as an accounting currency from 1999, but the cash landed in 2002." },
+  { q:"Which sea has no coastline?",
+    o:["Sargasso Sea","Coral Sea","Sea of Azov","Beaufort Sea"], a:0, p:200, t:"wager",
+    n:"It's bounded entirely by ocean currents rather than land." },
+  { q:"Which of these was invented FIRST?",
+    o:["Telephone","Light bulb","Fax machine","Bicycle"], a:2, p:200, t:"lonewolf",
+    n:"A working fax was patented in 1843, decades before the telephone." },
+  { q:"Which country does NOT share a border with Switzerland?",
+    o:["Austria","Slovenia","Liechtenstein","Italy"], a:1, p:200, t:"none",
+    n:"Slovenia is one country further along, past Austria and Italy." },
+  { q:"How long did the Hundred Years' War actually last?",
+    o:["99 years","100 years","116 years","121 years"], a:2, p:250, t:"underdog",
+    n:"1337 to 1453. The name was applied long after anyone was counting." },
+  { q:"Which animal is the fastest over a long distance?",
+    o:["Cheetah","Pronghorn","Ostrich","Greyhound"], a:1, p:250, t:"bounty",
+    n:"A cheetah wins the sprint and then quits. A pronghorn holds 55 km/h for miles." },
+  { q:"Which spice is the most expensive by weight?",
+    o:["Vanilla","Cardamom","Saffron","Black truffle"], a:2, p:250, t:"none",
+    n:"It takes around 150,000 crocus flowers to make a single kilogram." },
+  { q:"A 'murmuration' is a group of which animal?",
+    o:["Starlings","Bats","Jellyfish","Crows"], a:0, p:300, t:"speed",
+    n:"The word is doing a lot of work for one specific bird." },
+  { q:"Which country has the most time zones?",
+    o:["Russia","United States","France","China"], a:2, p:300, t:"swap",
+    n:"Twelve, thanks to overseas territories. China runs the whole country on one." },
+  { q:"Roughly what share of the world's population lives in the Northern Hemisphere?",
+    o:["About 68%","About 78%","About 88%","About 98%"], a:2, p:300, t:"wager",
+    n:"Close to nine in ten people. There simply isn't much land down south." },
+  { q:"Which planet currently holds the record for the most confirmed moons?",
+    o:["Jupiter","Saturn","Uranus","Neptune"], a:1, p:500, t:"final",
+    n:"Saturn pulled ahead in 2023 and kept going. The count keeps moving." }
+];
+
+const SECONDS = 25;
+const LETTERS = ["A","B","C","D"];
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const codeOf = () => Array.from({length:4},()=> "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
+const showsCard = (i) => i === 0 || (QUESTIONS[i].t !== "none" && QUESTIONS[i].t !== QUESTIONS[i-1].t);
+
+/* ---------------------------- scoring ---------------------------- */
+
+function scoreRound(q, subs, board){
+  const sorted = [...board].sort((a,b)=>b.score-a.score);
+  const leaderId = sorted[0]?.id ?? null;
+  const bottom = new Set(sorted.slice(Math.ceil(sorted.length/2)).map(t=>t.id));
+  const correct = subs.filter(s=>s.choice===q.a).sort((a,b)=>a.ts-b.ts);
+  const leaderWrong = leaderId != null && !correct.some(s=>s.id===leaderId);
+
+  return subs.map(s=>{
+    const ok = s.choice === q.a;
+    const w = (q.t==="wager"||q.t==="final") ? (s.wager||1) : 1;
+    let delta = 0;
+    if (ok) delta = q.p * w;
+    else if (q.t==="negative") delta = -100;
+    else if (q.t==="wager"||q.t==="final") delta = -Math.round(q.p*0.5*w);
+
+    if (ok && q.t==="speed" && correct[0]?.id===s.id) delta *= 2;
+    if (ok && q.t==="lonewolf" && correct.length===1) delta *= 3;
+    if (ok && q.t==="underdog" && bottom.has(s.id)) delta *= 2;
+    if (ok && q.t==="bounty" && leaderWrong && s.id!==leaderId) delta += 150;
+    return { id:s.id, ok, delta };
+  });
+}
+
+/* ---------------------------- app state ---------------------------- */
+
+const S = {
+  mode:null, code:null, teamId:null, teamName:"",
+  state:null, board:[], answers:{}, choice:null, wager:1, err:null
+};
+const app = document.getElementById("app");
+const P = (c) => `games/${c}`;
+
+/* ---------------------------- fragments ---------------------------- */
+
+const twistHTML = (t) => {
+  const x = TWISTS[t];
+  if (!x) return `<div class="panel" style="text-align:center">
+      <div class="eyebrow">Round one</div>
+      <h1 class="big" style="font-size:clamp(36px,8vw,72px)">Opening <em>bell</em></h1>
+      <p class="sub" style="margin:14px auto 0">Straight questions, 100 points each, 25 seconds on the clock. Enjoy it while it lasts.</p>
+    </div>`;
+  return `<div class="twist"><div class="tag">${esc(x.tag)}</div>
+    <div class="name">${esc(x.name)}</div><div class="desc">${esc(x.desc)}</div></div>`;
+};
+
+const boardHTML = (board, results, meId) => {
+  const rows = [...board].sort((a,b)=>b.score-a.score);
+  if (!rows.length) return `<p class="note">No teams yet.</p>`;
+  const dmap = Object.fromEntries((results||[]).map(r=>[r.id,r.delta]));
+  return rows.map((t,i)=>{
+    const d = dmap[t.id];
+    const cls = [i===0?"lead":"", d>0?"up":d<0?"dn":"", t.id===meId?"me":""].join(" ");
+    return `<div class="row ${cls}"><span class="rank">${i+1}</span><span class="nm">${esc(t.name)}</span>
+      ${d!==undefined&&d!==0?`<span class="dl">${d>0?"+"+d:d}</span>`:""}
+      <span class="sc">${t.score}</span></div>`;
+  }).join("");
+};
+
+const timerHTML = () => `<div class="timer" id="tbar"><i style="width:100%"></i></div>
+  <div class="stat" id="tnum" style="margin-top:8px"></div>`;
+
+setInterval(()=>{
+  const bar = document.getElementById("tbar"), num = document.getElementById("tnum");
+  if (!bar || !S.state?.endsAt) return;
+  const left = Math.max(0, S.state.endsAt - Date.now());
+  const pct = Math.min(100, left / (SECONDS*1000) * 100);
+  bar.firstElementChild.style.width = pct + "%";
+  bar.classList.toggle("low", pct < 30);
+  num.textContent = Math.ceil(left/1000) + "s remaining";
+}, 150);
+
+/* ---------------------------- host ---------------------------- */
+
+async function hostCreate(){
+  S.code = codeOf();
+  await set(ref(db, P(S.code)), { state:{ phase:"lobby", qi:0, endsAt:null }, board:null, answers:null });
+  onValue(ref(db, `${P(S.code)}/board`), snap => {
+    const v = snap.val() || {};
+    S.board = Object.entries(v).map(([id,t])=>({ id, name:t.name, score:t.score||0 }));
+    render();
+  });
+  onValue(ref(db, `${P(S.code)}/answers`), snap => { S.answers = snap.val() || {}; render(); });
+  S.state = { phase:"lobby", qi:0, endsAt:null };
+  render();
+}
+const pushState = (s) => { S.state = s; set(ref(db, `${P(S.code)}/state`), s); render(); };
+
+const openQuestion = (qi) => pushState({ phase:"question", qi, endsAt: Date.now() + SECONDS*1000 });
+
+function hostStart(){
+  if (showsCard(0)) pushState({ phase:"twist", qi:0, endsAt:null });
+  else openQuestion(0);
+}
+
+async function hostReveal(){
+  const qi = S.state.qi, q = QUESTIONS[qi];
+  const snap = await get(ref(db, `${P(S.code)}/answers/${qi}`));
+  const raw = snap.val() || {};
+  const subs = Object.entries(raw).filter(([,v])=>v.choice!=null)
+    .map(([id,v])=>({ id, choice:v.choice, ts:v.ts||0, wager:v.wager||1 }));
+  const results = scoreRound(q, subs, S.board);
+
+  let next = S.board.map(t=>{
+    const r = results.find(x=>x.id===t.id);
+    return r ? { ...t, score: t.score + r.delta } : t;
+  });
+  if (q.t === "swap" && next.length > 1){
+    const s = [...next].sort((a,b)=>b.score-a.score);
+    const [a,b] = [s[0], s[1]];
+    next = next.map(t => t.id===a.id ? {...t, score:b.score} : t.id===b.id ? {...t, score:a.score} : t);
+  }
+  const upd = {};
+  next.forEach(t => { upd[`${P(S.code)}/board/${t.id}/score`] = t.score; });
+  await update(ref(db), upd);
+  pushState({ phase:"reveal", qi, endsAt:null, results });
+}
+
+function hostNext(){
+  const n = S.state.qi + 1;
+  if (n >= QUESTIONS.length) return pushState({ phase:"final", qi:S.state.qi, endsAt:null, results:S.state.results });
+  if (showsCard(n)) pushState({ phase:"twist", qi:n, endsAt:null });
+  else openQuestion(n);
+}
+
+setInterval(()=>{
+  if (S.mode !== "host" || S.state?.phase !== "question") return;
+  const answered = Object.values(S.answers[S.state.qi] || {}).filter(a=>a.choice!=null).length;
+  if (Date.now() > S.state.endsAt || (S.board.length && answered >= S.board.length)) hostReveal();
+}, 600);
+
+/* ---------------------------- team ---------------------------- */
+
+async function teamJoin(code, name){
+  const snap = await get(ref(db, `${P(code)}/state`));
+  if (!snap.exists()) { S.err = `No game running under ${code}. Check the code on the big screen.`; return render(); }
+  S.code = code; S.teamName = name; S.err = null;
+  S.teamId = "t" + Math.random().toString(36).slice(2,9);
+  const me = ref(db, `${P(code)}/board/${S.teamId}`);
+  await set(me, { name, score:0 });
+  onDisconnect(me).cancel();
+  onValue(ref(db, `${P(code)}/state`), s => {
+    const prev = S.state?.qi;
+    S.state = s.val();
+    if (S.state && S.state.qi !== prev) { S.choice = null; S.wager = 1; }
+    render();
+  });
+  onValue(ref(db, `${P(code)}/board`), s => {
+    const v = s.val() || {};
+    S.board = Object.entries(v).map(([id,t])=>({ id, name:t.name, score:t.score||0 }));
+    render();
+  });
+}
+const teamPick = (i) => {
+  if (S.choice !== null) return;
+  S.choice = i;
+  update(ref(db, `${P(S.code)}/answers/${S.state.qi}/${S.teamId}`), { choice:i, ts:Date.now(), wager:S.wager });
+  render();
+};
+const teamWager = (w) => {
+  S.wager = w;
+  update(ref(db, `${P(S.code)}/answers/${S.state.qi}/${S.teamId}`), { wager:w });
+  render();
+};
+
+/* ---------------------------- render ---------------------------- */
+
+function render(){
+  if (!CONFIGURED || !db) return app.innerHTML = setupScreen();
+  if (S.mode === null) return app.innerHTML = homeScreen();
+  app.innerHTML = S.mode === "host" ? hostScreen() : teamScreen();
+}
+
+const setupScreen = () => `<div class="wrap narrow">
+  <div class="eyebrow">Setup needed</div>
+  <h1 class="big">Almost <em>there</em></h1>
+  <p class="sub">Paste your Firebase config into the top of <code class="inline">index.html</code>, then reload.
+  The README in this repo walks through it — about five minutes.</p>
+  <ol class="setup" style="margin-top:24px">
+    <li>Create a project at console.firebase.google.com</li>
+    <li>Build → Realtime Database → Create Database</li>
+    <li>Project settings → Your apps → Web → copy the config object</li>
+    <li>Replace the <code class="inline">PASTE_ME</code> values in index.html</li>
+  </ol></div>`;
+
+const homeScreen = () => `<div class="wrap narrow" style="padding-top:30px">
+  <div class="eyebrow">A pub quiz in fifteen questions</div>
+  <h1 class="big">Last <em>orders</em></h1>
+  <p class="sub">Teams answer on their phones. The scoring rules change between rounds without warning — wagers,
+  negative marking, bounties on whoever's winning, and one moment where first and second place swap scores.
+  Runs about twenty minutes.</p>
+  <div style="margin-top:30px">
+    <button class="choice" data-a="host"><div class="t">Host the quiz</div>
+      <div class="d">Put this on the big screen. You control the pace.</div></button>
+    <button class="choice" data-a="team"><div class="t">Join a game</div>
+      <div class="d">One phone per team. You'll need the room code.</div></button>
+  </div></div>`;
+
+function hostScreen(){
+  const st = S.state; if (!st) return `<div class="wrap"><p class="stat">Starting…</p></div>`;
+  const qi = st.qi, q = QUESTIONS[qi];
+  const head = `<div class="bar"><div><div class="eyebrow">Last Orders · Host screen</div>
+    <div class="stat" style="margin-top:6px">${st.phase==="lobby" ? "Waiting for teams"
+      : `Question ${qi+1} of ${QUESTIONS.length} · ${q.p} pts`}</div></div>
+    <button class="ghost" data-a="quit">End game</button></div>`;
+
+  if (st.phase === "lobby") return `<div class="wrap">${head}
+    <div class="panel" style="text-align:center;padding:38px 20px">
+      <div class="eyebrow">Room code</div><div class="code" style="margin-top:12px">${S.code}</div>
+      <p class="sub" style="margin:18px auto 0">Teams open this same web address on one phone each,
+      tap "Join a game" and enter the code.</p></div>
+    <div class="teamchips">${S.board.map(t=>`<span class="teamchip">${esc(t.name)}</span>`).join("")}</div>
+    <div class="foot"><button class="primary" data-a="start" ${S.board.length?"":"disabled"}>Start the quiz</button>
+      <span class="stat">${S.board.length} team${S.board.length===1?"":"s"} in</span></div></div>`;
+
+  if (st.phase === "twist") return `<div class="wrap">${head}${twistHTML(qi===0&&q.t==="none"?"none":q.t)}
+    <div class="foot"><button class="primary" data-a="open">Show the question</button>
+    ${(q.t==="wager"||q.t==="final")?`<span class="stat">Give them a moment to wager</span>`:""}</div></div>`;
+
+  if (st.phase === "question"){
+    const answered = Object.values(S.answers[qi]||{}).filter(a=>a.choice!=null).length;
+    return `<div class="wrap">${head}
+      <div class="qmeta"><span class="qnum">Question ${qi+1}</span>
+        <span class="qnum">${TWISTS[q.t]?esc(TWISTS[q.t].name):"Standard scoring"} · ${q.p} pts</span></div>
+      <h2 class="q">${esc(q.q)}</h2>
+      <div class="opts two">${q.o.map((o,i)=>`<div class="opt"><span class="k">${LETTERS[i]}</span>${esc(o)}</div>`).join("")}</div>
+      ${timerHTML()}
+      <div class="foot"><span class="stat">${answered} of ${S.board.length} teams locked in</span>
+        <button class="ghost" data-a="reveal">Reveal now</button></div></div>`;
+  }
+
+  if (st.phase === "reveal") return `<div class="wrap">${head}
+    <div class="qmeta"><span class="qnum">Question ${qi+1} · answer</span>
+      <span class="qnum">${(st.results||[]).filter(r=>r.ok).length} of ${S.board.length} correct</span></div>
+    <h2 class="q">${esc(q.q)}</h2>
+    <div class="opts two">${q.o.map((o,i)=>
+      `<div class="opt ${i===q.a?"right":"wrong"}"><span class="k">${LETTERS[i]}</span>${esc(o)}</div>`).join("")}</div>
+    <p class="note">${esc(q.n)}</p>
+    ${q.t==="swap"?`<div class="banner" style="margin-top:16px">First and second have swapped scores. Look at the board.</div>`:""}
+    <div style="margin-top:26px">${boardHTML(S.board, st.results)}</div>
+    <div class="foot"><button class="primary" data-a="next">${qi+1>=QUESTIONS.length?"Final scores":"Next question"}</button></div></div>`;
+
+  return `<div class="wrap">${head}<div class="eyebrow">That's last orders</div>
+    <h1 class="big">Final <em>scores</em></h1>
+    <div style="margin-top:26px">${boardHTML(S.board)}</div></div>`;
+}
+
+function teamScreen(){
+  if (!S.teamId) return `<div class="wrap narrow">
+    <div class="eyebrow">Last Orders</div><h1 class="big">Join a <em>game</em></h1>
+    <div style="margin-top:24px"><label class="eyebrow" for="c">Room code</label>
+      <input id="c" class="input" maxlength="4" placeholder="ABCD"
+        style="margin-top:8px;font-family:var(--data);letter-spacing:.2em;text-transform:uppercase"></div>
+    <div style="margin-top:18px"><label class="eyebrow" for="n">Team name</label>
+      <input id="n" class="input" maxlength="22" placeholder="Quizteam Aguilera" style="margin-top:8px"></div>
+    ${S.err?`<div class="banner" style="margin-top:16px">${esc(S.err)}</div>`:""}
+    <div class="foot"><button class="primary" data-a="join">Join</button>
+      <button class="ghost" data-a="quit">Back</button></div></div>`;
+
+  const st = S.state; if (!st) return `<div class="wrap narrow"><p class="stat">Connecting…</p></div>`;
+  const q = QUESTIONS[st.qi];
+  const me = S.board.find(t=>t.id===S.teamId);
+  const rank = [...S.board].sort((a,b)=>b.score-a.score).findIndex(t=>t.id===S.teamId)+1;
+  const head = `<div class="bar"><div><div class="eyebrow">${esc(S.teamName)}</div>
+    ${me?`<div class="stat" style="margin-top:6px">${me.score} pts · ${rank} of ${S.board.length}</div>`:""}</div>
+    <span class="stat">${S.code}</span></div>`;
+
+  if (st.phase === "lobby") return `<div class="wrap narrow">${head}
+    <div class="panel" style="text-align:center;padding:40px 20px">
+      <h1 class="big" style="font-size:clamp(30px,8vw,52px)">You're <em>in</em></h1>
+      <p class="sub" style="margin:14px auto 0">Watch the big screen. It starts shortly.</p></div></div>`;
+
+  if (st.phase === "twist"){
+    const wagering = q.t==="wager" || q.t==="final";
+    return `<div class="wrap narrow">${head}${twistHTML(st.qi===0&&q.t==="none"?"none":q.t)}
+      ${wagering?`<div style="margin-top:20px"><div class="eyebrow">Your multiplier · locks when the question appears</div>
+        <div class="chips">${[1,2,3].map(w=>`<button class="chip ${S.wager===w?"on":""}" data-a="wager" data-w="${w}">
+          ×${w}<small>${w===1?"safe":w===2?"bold":"reckless"}</small></button>`).join("")}</div>
+        <p class="note">Right: ${q.p*S.wager} points. Wrong: ${Math.round(q.p*0.5*S.wager)} off your score.</p></div>`:""}
+      </div>`;
+  }
+
+  if (st.phase === "question") return `<div class="wrap narrow">${head}
+    <div class="qmeta"><span class="qnum">Question ${st.qi+1}</span>
+      <span class="qnum">${q.p*((q.t==="wager"||q.t==="final")?S.wager:1)} pts</span></div>
+    <h2 class="q sm">${esc(q.q)}</h2>
+    <div class="opts">${q.o.map((o,i)=>`<button class="opt ${S.choice===i?"sel":""} ${S.choice!==null?"locked":""}" data-a="pick" data-i="${i}"><span class="k">${LETTERS[i]}</span>${esc(o)}</button>`).join("")}</div>
+    ${timerHTML()}
+    ${S.choice!==null?`<p class="note">Locked in. No changing your mind.</p>`:""}</div>`;
+
+  if (st.phase === "reveal"){
+    const r = (st.results||[]).find(x=>x.id===S.teamId);
+    return `<div class="wrap narrow">${head}
+      <div class="panel" style="text-align:center;padding:30px 18px;border-color:${r?.ok?"#4E9E6A":"rgba(201,165,78,.22)"}">
+        <div class="eyebrow">${r?.ok?"Correct":r?"Not this time":"No answer"}</div>
+        <h1 class="big" style="font-size:clamp(34px,9vw,60px)">${r?(r.delta>0?"+"+r.delta:r.delta):"0"}</h1>
+        <p class="sub" style="margin:12px auto 0">Answer: ${esc(q.o[q.a])}</p></div>
+      <div style="margin-top:22px">${boardHTML(S.board, st.results, S.teamId)}</div></div>`;
+  }
+
+  return `<div class="wrap narrow">${head}<div class="eyebrow">That's last orders</div>
+    <h1 class="big">Final <em>scores</em></h1>
+    <div style="margin-top:22px">${boardHTML(S.board, null, S.teamId)}</div></div>`;
+}
+
+/* ---------------------------- events ---------------------------- */
+
+app.addEventListener("click", (e)=>{
+  const el = e.target.closest("[data-a]"); if (!el) return;
+  const a = el.dataset.a;
+  if (a==="host"){ S.mode="host"; hostCreate(); }
+  else if (a==="team"){ S.mode="team"; render(); }
+  else if (a==="quit"){ location.reload(); }
+  else if (a==="start") hostStart();
+  else if (a==="open") openQuestion(S.state.qi);
+  else if (a==="reveal") hostReveal();
+  else if (a==="next") hostNext();
+  else if (a==="pick"){ if (S.choice === null) teamPick(Number(el.dataset.i)); }
+  else if (a==="wager") teamWager(Number(el.dataset.w));
+  else if (a==="join"){
+    const c = (document.getElementById("c").value||"").trim().toUpperCase();
+    const n = (document.getElementById("n").value||"").trim();
+    if (c.length!==4 || !n){ S.err="Enter a four-letter code and a team name."; return render(); }
+    teamJoin(c, n);
+  }
+});
+
+window.addEventListener("beforeunload", (e)=>{
+  if (S.mode==="host" && S.state && S.state.phase!=="lobby" && S.state.phase!=="final"){
+    e.preventDefault(); e.returnValue = "";
+  }
+});
+
+render();
+</script>
+</body>
+</html>
