@@ -4,12 +4,12 @@ A multiplayer pub quiz game built with vanilla JavaScript and Firebase Realtime 
 
 ## Features
 
-- **15 Questions** with point values from 100–500
+- **35 Questions** spanning movies, music, science, history, geography, and more with point values from 100–500
 - **8 Scoring Twists**: Speed Kills, Negative Marking, Double or Nothing (wagers), Lone Wolf, Underdog Uprising, Bounty on the Leader, The Great Swap, Last Orders finale
 - **Real-time Sync** via Firebase — all devices stay in perfect sync
 - **Beautiful UI** with pub quiz aesthetic (brass accents, dark felt baize colors)
 - **Responsive Design** — works on big screens (host) and phones (teams)
-- **Runs ~20 minutes** end-to-end
+- **Runs ~45–50 minutes** end-to-end
 
 ## Setup
 
