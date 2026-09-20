@@ -112,7 +112,9 @@ const FIREBASE_CONFIG = {
 - **Test mode** database rules allow anyone to read/write. For production, implement proper Firebase rules.
 - **Room codes** are random 4-letter codes (no vowels, to avoid awkward words)
 - **Automatic reveal** triggers after 25 seconds OR when all teams answer
-- **Connection loss** is gracefully handled; teams rejoin when connection restores
+- **Rejoining**: a team's identity is saved on its phone, so a reload or a sleeping screen drops straight back into the same team with its score and any answer already given. If the saved identity is lost, joining again with the same team name after the quiz has started reclaims that team. Duplicate names are refused in the lobby.
+- **Timing** (countdown and the "first correct answer" bonus) uses the Firebase server clock, so differing phone clocks don't matter.
+- **Big groups**: the leaderboard shows the top 10 plus the viewer's own row, so 40 teams still fit on screen.
 
 Enjoy your quiz night! 🍺📚
 

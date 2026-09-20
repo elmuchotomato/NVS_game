@@ -95,6 +95,7 @@ button.opt:hover{ background:var(--baize2); border-color:var(--brass) }
 .row.up .dl{ color:#6FCB8E } .row.dn .dl{ color:#E8776B }
 .row.lead .nm{ color:var(--brass) }
 .row.me{ background:rgba(201,165,78,.08) }
+.more{ padding:10px 4px; text-align:center }
 
 .chips{ display:flex; gap:10px; margin-top:16px }
 .chip{ flex:1; border:1px solid rgba(242,237,225,.25); border-radius:4px; padding:16px 8px; text-align:center;
@@ -139,7 +140,7 @@ const FIREBASE_CONFIG = {
 /* ================================================================ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, update, get, onValue, onDisconnect }
+import { getDatabase, ref, set, update, get, onValue, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const CONFIGURED = !JSON.stringify(FIREBASE_CONFIG).includes("PASTE_ME");
@@ -325,6 +326,17 @@ const S = {
 const app = document.getElementById("app");
 const P = (c) => `games/${c}`;
 
+/* Phone clocks can be seconds apart, so all timing runs off the database server's clock. */
+let clockOffset = 0;
+const now = () => Date.now() + clockOffset;
+if (db) onValue(ref(db, ".info/serverTimeOffset"), s => { clockOffset = s.val() || 0; });
+
+/* A team's identity is remembered on the phone so a reload or a sleeping screen rejoins the same team. */
+const SAVE_KEY = "lastorders.team", SAVE_MAX_AGE = 12*3600*1000;
+const saveTeam = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(
+  { code:S.code, teamId:S.teamId, at:Date.now() })); } catch {} };
+const clearTeam = () => { try { localStorage.removeItem(SAVE_KEY); } catch {} };
+
 /* ---------------------------- fragments ---------------------------- */
 
 const twistHTML = (t) => {
@@ -338,17 +350,24 @@ const twistHTML = (t) => {
     <div class="name">${esc(x.name)}</div><div class="desc">${esc(x.desc)}</div></div>`;
 };
 
-const boardHTML = (board, results, meId) => {
+const boardHTML = (board, results, meId, limit=Infinity) => {
   const rows = [...board].sort((a,b)=>b.score-a.score);
   if (!rows.length) return `<p class="note">No teams yet.</p>`;
   const dmap = Object.fromEntries((results||[]).map(r=>[r.id,r.delta]));
-  return rows.map((t,i)=>{
+  const line = (t,i)=>{
     const d = dmap[t.id];
     const cls = [i===0?"lead":"", d>0?"up":d<0?"dn":"", t.id===meId?"me":""].join(" ");
     return `<div class="row ${cls}"><span class="rank">${i+1}</span><span class="nm">${esc(t.name)}</span>
       ${d!==undefined&&d!==0?`<span class="dl">${d>0?"+"+d:d}</span>`:""}
       <span class="sc">${t.score}</span></div>`;
-  }).join("");
+  };
+  if (rows.length <= limit) return rows.map(line).join("");
+  const meIdx = rows.findIndex(t=>t.id===meId);
+  const meBelow = meIdx >= limit;
+  const hidden = rows.length - limit - (meBelow ? 1 : 0);
+  return rows.slice(0, limit).map(line).join("")
+    + (meBelow ? `<div class="stat more">···</div>${line(rows[meIdx], meIdx)}` : "")
+    + (hidden > 0 ? `<div class="stat more">and ${hidden} more team${hidden===1?"":"s"}</div>` : "");
 };
 
 const timerHTML = () => `<div class="timer" id="tbar"><i style="width:100%"></i></div>
@@ -357,7 +376,7 @@ const timerHTML = () => `<div class="timer" id="tbar"><i style="width:100%"></i>
 setInterval(()=>{
   const bar = document.getElementById("tbar"), num = document.getElementById("tnum");
   if (!bar || !S.state?.endsAt) return;
-  const left = Math.max(0, S.state.endsAt - Date.now());
+  const left = Math.max(0, S.state.endsAt - now());
   const pct = Math.min(100, left / (SECONDS*1000) * 100);
   bar.firstElementChild.style.width = pct + "%";
   bar.classList.toggle("low", pct < 30);
@@ -380,14 +399,21 @@ async function hostCreate(){
 }
 const pushState = (s) => { S.state = s; set(ref(db, `${P(S.code)}/state`), s); render(); };
 
-const openQuestion = (qi) => pushState({ phase:"question", qi, endsAt: Date.now() + SECONDS*1000 });
+const openQuestion = (qi) => pushState({ phase:"question", qi, endsAt: now() + SECONDS*1000 });
 
 function hostStart(){
   if (showsCard(0)) pushState({ phase:"twist", qi:0, endsAt:null });
   else openQuestion(0);
 }
 
+let revealing = false;
 async function hostReveal(){
+  if (revealing || S.state?.phase !== "question") return;
+  revealing = true;
+  try { await scoreAndReveal(); } finally { revealing = false; }
+}
+
+async function scoreAndReveal(){
   const qi = S.state.qi, q = QUESTIONS[qi];
   const snap = await get(ref(db, `${P(S.code)}/answers/${qi}`));
   const raw = snap.val() || {};
@@ -420,26 +446,58 @@ function hostNext(){
 setInterval(()=>{
   if (S.mode !== "host" || S.state?.phase !== "question") return;
   const answered = Object.values(S.answers[S.state.qi] || {}).filter(a=>a.choice!=null).length;
-  if (Date.now() > S.state.endsAt || (S.board.length && answered >= S.board.length)) hostReveal();
+  if (now() > S.state.endsAt || (S.board.length && answered >= S.board.length)) hostReveal();
 }, 600);
 
 /* ---------------------------- team ---------------------------- */
 
 async function teamJoin(code, name){
-  const snap = await get(ref(db, `${P(code)}/state`));
-  if (!snap.exists()) { S.err = `No game running under ${code}. Check the code on the big screen.`; return render(); }
-  S.code = code; S.teamName = name; S.err = null;
-  S.teamId = "t" + Math.random().toString(36).slice(2,9);
-  const me = ref(db, `${P(code)}/board/${S.teamId}`);
-  await set(me, { name, score:0 });
-  onDisconnect(me).cancel();
-  onValue(ref(db, `${P(code)}/state`), s => {
+  const st = await get(ref(db, `${P(code)}/state`));
+  if (!st.exists()) { S.err = `No game running under ${code}. Check the code on the big screen.`; return render(); }
+  if (st.val().phase === "final") { S.err = "That game has already finished."; return render(); }
+  const board = (await get(ref(db, `${P(code)}/board`))).val() || {};
+  const same = Object.entries(board).find(([,t]) => String(t.name).toLowerCase() === name.toLowerCase());
+  if (same && st.val().phase === "lobby") { S.err = "That team name is taken. Pick another."; return render(); }
+  S.code = code; S.err = null;
+  if (same) { S.teamId = same[0]; S.teamName = same[1].name; }   // same name once the game is running: rejoin that team
+  else {
+    S.teamId = "t" + Math.random().toString(36).slice(2,9); S.teamName = name;
+    await set(ref(db, `${P(code)}/board/${S.teamId}`), { name, score:0 });
+  }
+  await teamAttach(st.val(), !!same);
+}
+
+async function teamResume(){
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch {}
+  if (!saved || Date.now() - saved.at > SAVE_MAX_AGE) return clearTeam();
+  S.mode = "team"; S.resuming = true; render();
+  try {
+    const [st, me] = await Promise.all([ get(ref(db, `${P(saved.code)}/state`)),
+      get(ref(db, `${P(saved.code)}/board/${saved.teamId}`)) ]);
+    if (st.exists() && st.val().phase !== "final" && me.exists()) {
+      S.code = saved.code; S.teamId = saved.teamId; S.teamName = me.val().name;
+      await teamAttach(st.val(), true);
+    } else { clearTeam(); S.mode = null; }
+  } catch (e) { console.error(e); S.mode = null; }
+  S.resuming = false; render();
+}
+
+async function teamAttach(st, rejoin){
+  S.state = st; S.choice = null; S.wager = 1;
+  if (rejoin) {   // pick up an answer already given this question so it can't be changed after a reload
+    const a = (await get(ref(db, `${P(S.code)}/answers/${st.qi}/${S.teamId}`))).val();
+    if (a?.choice != null) S.choice = a.choice;
+    if (a?.wager) S.wager = a.wager;
+  }
+  saveTeam();
+  onValue(ref(db, `${P(S.code)}/state`), s => {
     const prev = S.state?.qi;
     S.state = s.val();
     if (S.state && S.state.qi !== prev) { S.choice = null; S.wager = 1; }
     render();
   });
-  onValue(ref(db, `${P(code)}/board`), s => {
+  onValue(ref(db, `${P(S.code)}/board`), s => {
     const v = s.val() || {};
     S.board = Object.entries(v).map(([id,t])=>({ id, name:t.name, score:t.score||0 }));
     render();
@@ -448,7 +506,7 @@ async function teamJoin(code, name){
 const teamPick = (i) => {
   if (S.choice !== null) return;
   S.choice = i;
-  update(ref(db, `${P(S.code)}/answers/${S.state.qi}/${S.teamId}`), { choice:i, ts:Date.now(), wager:S.wager });
+  update(ref(db, `${P(S.code)}/answers/${S.state.qi}/${S.teamId}`), { choice:i, ts:serverTimestamp(), wager:S.wager });
   render();
 };
 const teamWager = (w) => {
@@ -531,7 +589,7 @@ function hostScreen(){
       `<div class="opt ${i===q.a?"right":"wrong"}"><span class="k">${LETTERS[i]}</span>${esc(o)}</div>`).join("")}</div>
     <p class="note">${esc(q.n)}</p>
     ${q.t==="swap"?`<div class="banner" style="margin-top:16px">First and second have swapped scores. Look at the board.</div>`:""}
-    <div style="margin-top:26px">${boardHTML(S.board, st.results)}</div>
+    <div style="margin-top:26px">${boardHTML(S.board, st.results, null, 10)}</div>
     <div class="foot"><button class="primary" data-a="next">${qi+1>=QUESTIONS.length?"Final scores":"Next question"}</button></div></div>`;
 
   return `<div class="wrap">${head}<div class="eyebrow">That's last orders</div>
@@ -540,6 +598,7 @@ function hostScreen(){
 }
 
 function teamScreen(){
+  if (S.resuming) return `<div class="wrap narrow"><p class="stat">Rejoining your team…</p></div>`;
   if (!S.teamId) return `<div class="wrap narrow">
     <div class="eyebrow">Last Orders</div><h1 class="big">Join a <em>game</em></h1>
     <div style="margin-top:24px"><label class="eyebrow" for="c">Room code</label>
@@ -557,7 +616,7 @@ function teamScreen(){
   const rank = [...S.board].sort((a,b)=>b.score-a.score).findIndex(t=>t.id===S.teamId)+1;
   const head = `<div class="bar"><div><div class="eyebrow">${esc(S.teamName)}</div>
     ${me?`<div class="stat" style="margin-top:6px">${me.score} pts · ${rank} of ${S.board.length}</div>`:""}</div>
-    <span class="stat">${S.code}</span></div>`;
+    <span class="stat">${S.code} · <a href="#" data-a="leave" style="color:inherit">leave</a></span></div>`;
 
   if (st.phase === "lobby") return `<div class="wrap narrow">${head}
     <div class="panel" style="text-align:center;padding:40px 20px">
@@ -589,12 +648,12 @@ function teamScreen(){
         <div class="eyebrow">${r?.ok?"Correct":r?"Not this time":"No answer"}</div>
         <h1 class="big" style="font-size:clamp(34px,9vw,60px)">${r?(r.delta>0?"+"+r.delta:r.delta):"0"}</h1>
         <p class="sub" style="margin:12px auto 0">Answer: ${esc(q.o[q.a])}</p></div>
-      <div style="margin-top:22px">${boardHTML(S.board, st.results, S.teamId)}</div></div>`;
+      <div style="margin-top:22px">${boardHTML(S.board, st.results, S.teamId, 10)}</div></div>`;
   }
 
   return `<div class="wrap narrow">${head}<div class="eyebrow">That's last orders</div>
     <h1 class="big">Final <em>scores</em></h1>
-    <div style="margin-top:22px">${boardHTML(S.board, null, S.teamId)}</div></div>`;
+    <div style="margin-top:22px">${boardHTML(S.board, null, S.teamId, 10)}</div></div>`;
 }
 
 /* ---------------------------- events ---------------------------- */
@@ -604,7 +663,8 @@ app.addEventListener("click", (e)=>{
   const a = el.dataset.a;
   if (a==="host"){ S.mode="host"; hostCreate(); }
   else if (a==="team"){ S.mode="team"; render(); }
-  else if (a==="quit"){ location.reload(); }
+  else if (a==="quit"){ clearTeam(); location.reload(); }
+  else if (a==="leave"){ e.preventDefault(); if (confirm("Leave this game? Your team's place will be kept, but you'll need to rejoin with the same name.")) { clearTeam(); location.reload(); } }
   else if (a==="start") hostStart();
   else if (a==="open") openQuestion(S.state.qi);
   else if (a==="reveal") hostReveal();
@@ -626,6 +686,7 @@ window.addEventListener("beforeunload", (e)=>{
 });
 
 render();
+if (db) teamResume();
 </script>
 </body>
 </html>
