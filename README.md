@@ -2,6 +2,8 @@
 
 A multiplayer pub quiz game built with vanilla JavaScript and Firebase Realtime Database. Teams answer on their phones while the host controls the big screen. Scoring rules change between rounds with special twists like negative marking, wagers, speed rounds, and even a score-swap finale.
 
+**Live site:** https://elmuchotomato.github.io/NVS_game/
+
 ## Features
 
 - **35 Questions** spanning movies, music, science, history, geography, and more with point values from 100–500
